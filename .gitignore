@@ -2,3 +2,4 @@ build
 glfw
 .DS_Store
 WebGPU-distribution-wgpu
+glfw3webgpu

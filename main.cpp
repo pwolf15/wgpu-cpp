@@ -1,12 +1,51 @@
+#include <cassert>
 #include <iostream>
+#include <vector>
 #include <GLFW/glfw3.h>
+#include <glfw3webgpu.h>
 
 #include "webgpu/webgpu.h"
+#include "webgpu-release.h" // alias required for wgpu-native
 
 #ifdef WEBGPU_BACKEND_WGPU
 #include <webgpu/wgpu.h>
 #define wgpuInstanceRelease wgpuInstanceDrop
 #endif
+
+WGPUAdapter requestAdapter(WGPUInstance instance, WGPURequestAdapterOptions const * options)
+{
+    struct UserData 
+    {
+        WGPUAdapter adapter = nullptr;
+        bool requestEnded = false;
+    };
+    UserData userData;
+
+    auto onAdapterRequestEnded = [](WGPURequestAdapterStatus status, WGPUAdapter adapter, char const* message, void *pUserData)
+    {
+        UserData& userData = *reinterpret_cast<UserData*>(pUserData);
+        if (status == WGPURequestAdapterStatus_Success)
+        {
+            userData.adapter = adapter;
+        }
+        else
+        {
+            std::cout << "Could not get WebGPU adapter: " << message << std::endl;
+        }
+        userData.requestEnded = true;
+    };
+
+    wgpuInstanceRequestAdapter(
+        instance,
+        options,
+        onAdapterRequestEnded,
+        (void*)&userData
+    );
+
+    assert(userData.requestEnded);
+
+    return userData.adapter;
+}
 
 int main()
 {
@@ -15,6 +54,7 @@ int main()
         std::cerr << "Could not initialize GLFW!" << std::endl;
         return 1;
     }
+    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     GLFWwindow* window = glfwCreateWindow(640, 480, "Learn WebGPU", NULL, NULL);
     if (!window)
     {
@@ -37,6 +77,25 @@ int main()
 
     std::cout << "WGPU instance: " << instance << std::endl;
 
+    std::cout << "Requesting adapter..." << std::endl;
+
+    WGPUSurface surface = glfwGetWGPUSurface(instance, window);
+    WGPURequestAdapterOptions adapterOpts = {};
+    adapterOpts.nextInChain = nullptr;
+    adapterOpts.compatibleSurface = surface;
+
+    WGPUAdapter adapter = requestAdapter(instance, &adapterOpts);
+
+    std::cout << "Got adapter: " << adapter << std::endl;
+
+
+    std::vector<WGPUFeatureName> features;
+
+    size_t featureCount = wgpuAdapterEnumerateFeatures(adapter, nullptr);
+
+    features.resize(featureCount);
+    std::cout << "Feature count: " << featureCount << std::endl;
+
     std::cout << "Hello world" << std::endl;
 
     while (!glfwWindowShouldClose(window))
@@ -44,6 +103,7 @@ int main()
         glfwPollEvents();
     }
 
+    wgpuAdapterRelease(adapter);
     wgpuInstanceRelease(instance);
     glfwDestroyWindow(window);
     glfwTerminate();
