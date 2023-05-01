@@ -96,6 +96,13 @@ int main()
     features.resize(featureCount);
     std::cout << "Feature count: " << featureCount << std::endl;
 
+    wgpuAdapterEnumerateFeatures(adapter, features.data());
+
+    std::cout << "Adapter features:" << std::endl;
+    for (auto f: features)
+    {
+        std::cout << " - " << f << std::endl;
+    }
     std::cout << "Hello world" << std::endl;
 
     while (!glfwWindowShouldClose(window))
